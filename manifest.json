@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "id": "shilai_li.eye-break",
+  "name": "Eye Break",
+  "version": "0.1.0",
+  "author": "Shilai Li",
+  "license": "MIT",
+  "description": "A minimal, native eye-break reminder. 20-20-20, keyboard-driven.",
+  "kinds": [
+    "bar-widget",
+    "overlay"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml",
+    "overlay": "Break.qml"
+  },
+  "barWidget": {
+    "displayName": "Eye Break",
+    "description": "Countdown to your next eye break",
+    "category": "Health",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "intervalMinutes": 20,
+      "breakSeconds": 20,
+      "pauseWhenIdle": true,
+      "idleGraceSeconds": 300,
+      "pauseInFullscreen": false,
+      "strictMode": false,
+      "preNotifySeconds": 0,
+      "showCountdown": true
+    },
+    "schema": [
+      {
+        "key": "intervalMinutes",
+        "type": "number",
+        "label": "Interval",
+        "description": "Minutes of screen time between breaks. The 20-20-20 rule says 20.",
+        "defaultValue": 20,
+        "min": 1,
+        "max": 180
+      },
+      {
+        "key": "breakSeconds",
+        "type": "number",
+        "label": "Break length",
+        "description": "Seconds to look at something 20 feet away.",
+        "defaultValue": 20,
+        "min": 5,
+        "max": 600
+      },
+      {
+        "key": "showCountdown",
+        "type": "boolean",
+        "label": "Show countdown",
+        "description": "Show the time remaining next to the bar glyph. Off leaves just the glyph.",
+        "defaultValue": true
+      },
+      {
+        "key": "pauseWhenIdle",
+        "type": "boolean",
+        "label": "Pause when idle",
+        "description": "Stop the clock when you step away. An absence longer than one break counts as a break taken.",
+        "defaultValue": true
+      },
+      {
+        "key": "idleGraceSeconds",
+        "type": "number",
+        "label": "Idle after",
+        "description": "Seconds without input before you count as away. Below a few minutes this catches reading, not stepping out.",
+        "defaultValue": 300,
+        "min": 10,
+        "max": 3600
+      },
+      {
+        "key": "pauseInFullscreen",
+        "type": "boolean",
+        "label": "Pause in fullscreen",
+        "description": "Do not interrupt a fullscreen window. The break is retried a minute later.",
+        "defaultValue": false
+      },
+      {
+        "key": "strictMode",
+        "type": "boolean",
+        "label": "Strict mode",
+        "description": "Remove the skip key from the break screen. The break runs its full length.",
+        "defaultValue": false
+      },
+      {
+        "key": "preNotifySeconds",
+        "type": "number",
+        "label": "Heads-up",
+        "description": "Seconds of warning before a break, as a desktop notification. 0 turns it off.",
+        "defaultValue": 0,
+        "min": 0,
+        "max": 300
+      }
+    ]
+  }
+}

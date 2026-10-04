@@ -300,7 +300,9 @@ Panel {
     owner: root.barIdentity
     bar: root.bar
     open: root.opened
-    centerOnBar: true
+    // Follow the widget as the bar layout changes; KeyboardPanel keeps the
+    // card within the screen edges on horizontal and vertical bars.
+    centerOnBar: false
     focusTarget: keyCatcher
     // The same 560 the clock panel uses, so the two line up when Tab walks
     // between them.

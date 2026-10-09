@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -47,15 +48,15 @@ Item {
   readonly property real progress: Model.clamp01(elapsedMs / totalMs)
 
   readonly property string fontFamily: Style.font.family
-  readonly property color foreground: Color.foreground
+  readonly property color foreground: Commons.Color.foreground
   // Denser than the menu scrim: the point of the surface is that there is
   // nothing left to read behind it.
-  readonly property color scrim: Util.alpha(Color.background, 0.94)
+  readonly property color scrim: Util.alpha(Commons.Color.background, 0.94)
   // The meter warms toward the accent as it fills, so finishing reads as an
   // arrival rather than a bar that merely stopped.
   readonly property color meterColor: Qt.tint(
     Qt.darker(foreground, 1.4),
-    Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, progress))
+    Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, progress))
 
   // A fixed width: the meter is centered on an empty screen, so it has no
   // column to line up with and nothing to fit inside.
@@ -218,7 +219,7 @@ Item {
             color: "transparent"
             radius: Style.cornerRadius
             border.width: Style.spacing.hairline
-            border.color: Style.normalBorderFor(root.foreground, Color.accent)
+            border.color: Style.normalBorderFor(root.foreground, Commons.Color.accent)
 
             Text {
               id: headline

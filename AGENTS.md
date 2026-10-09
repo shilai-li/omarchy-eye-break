@@ -18,7 +18,7 @@ Non-negotiables:
 - **No clutter.** One bar glyph, one panel, one break overlay.
 - **Keyboard-driven.** Every action has a key; the mouse is optional.
 - **Themed, never styled.** Zero hex literals, zero raw pixel sizes — only
-  `Color.*` and `Style.*`, so `omarchy theme set` repaints the plugin.
+  `Commons.Color.*` and `Style.*`, so `omarchy theme set` repaints the plugin.
 - **Minimal is the feature.** Ask before adding a surface, a kind, or changing
   the interval defaults.
 
@@ -130,10 +130,19 @@ that. Order the function so the release is unconditional.
 
 | Do | Don't |
 |---|---|
-| `Color.foreground/.accent/.urgent/.popups.*` | any hex literal |
+| `Commons.Color.foreground/.accent/.urgent/.popups.*` | any hex literal |
 | `Style.space(12)`, `Style.font.caption…displayLarge` | raw pixels, `pixelSize: 14` |
 | `Style.cornerRadius` (may be `0`), `Style.normalBorderFor(...)` | always-rounded, `"#333"` |
-| `bar ? bar.foreground : Color.foreground` | assuming `bar` is set at construction |
+| `bar ? bar.foreground : Commons.Color.foreground` | assuming `bar` is set at construction |
+| `import qs.Commons as Commons` beside `import qs.Commons` | bare `Color.*` |
+
+**Bare `Color` is a dead reference.** Qt 6.12 ships its own `Color` type, so
+a plain `Color.background` resolves to nothing in a plugin. The read comes
+back `undefined`, `Util.alpha(undefined, …)` turns into black, and a color
+property fed `undefined` throws. The break overlay then rendered as a black
+screen when the interval ended. Qualify the palette singleton as
+`Commons.Color` (see `docs/omarchy-shell.md`, "Theme tokens"). `Style`,
+`Util` and `Border` can stay unqualified.
 
 Boxes are `Rectangle`s with hairline borders, not box-drawing characters;
 meters and histograms are block glyphs (`▁▂▃▄▅▆▇█`, `█`/`░`) in the monospace

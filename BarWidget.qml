@@ -3,6 +3,7 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Wayland
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -80,11 +81,11 @@ BarWidget {
   // The bar's own foreground until the cycle is nearly up, then blended
   // toward the theme's urgent color. "Nearly time" should be legible without
   // adding a second glyph to a bar that is meant to stay quiet.
-  readonly property color baseForeground: bar ? bar.barForeground : Color.foreground
+  readonly property color baseForeground: bar ? bar.barForeground : Commons.Color.foreground
   readonly property color glyphColor: {
     if (root.dimmed) return Qt.darker(root.baseForeground, 1.7)
     if (root.urgency <= 0) return root.baseForeground
-    var hot = bar ? bar.urgent : Color.urgent
+    var hot = bar ? bar.urgent : Commons.Color.urgent
     return Qt.tint(root.baseForeground, Qt.rgba(hot.r, hot.g, hot.b, root.urgency))
   }
 

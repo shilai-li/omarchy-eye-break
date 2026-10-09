@@ -1,5 +1,6 @@
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 import "Model.js" as Model
 
@@ -60,15 +61,15 @@ Panel {
   }
 
   // ---- Theme. Nothing here names a color; the palette does.
-  readonly property color contentForeground: bar ? bar.foreground : Color.foreground
+  readonly property color contentForeground: bar ? bar.foreground : Commons.Color.foreground
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color dim: Qt.darker(contentForeground, 1.5)
   readonly property color dimmer: Qt.darker(contentForeground, 2.0)
-  readonly property color frameColor: Style.normalBorderFor(contentForeground, Color.accent)
-  readonly property color accentColor: Style.selectedStateColor(contentForeground, Color.accent)
+  readonly property color frameColor: Style.normalBorderFor(contentForeground, Commons.Color.accent)
+  readonly property color accentColor: Style.selectedStateColor(contentForeground, Commons.Color.accent)
   readonly property color hotColor: {
     if (root.urgency <= 0) return root.accentColor
-    var hot = Color.urgent
+    var hot = Commons.Color.urgent
     return Qt.tint(root.accentColor, Qt.rgba(hot.r, hot.g, hot.b, root.urgency))
   }
 
@@ -202,7 +203,7 @@ Panel {
       y: -Math.round(height / 2)
       width: titleText.implicitWidth + Style.space(10)
       height: titleText.implicitHeight
-      color: Color.popups.background
+      color: Commons.Color.popups.background
 
       Text {
         id: titleText
@@ -223,7 +224,7 @@ Panel {
       y: -Math.round(height / 2)
       width: badgeText.implicitWidth + Style.space(10)
       height: badgeText.implicitHeight
-      color: Color.popups.background
+      color: Commons.Color.popups.background
 
       Text {
         id: badgeText

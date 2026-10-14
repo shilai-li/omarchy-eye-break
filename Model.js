@@ -569,23 +569,31 @@ function formatAgo(ms) {
   return formatDuration(n) + " ago"
 }
 
-// What the bar shows next to the glyph. Kept here so the horizontal label,
-// the vertical stack and the tooltip cannot drift apart.
-function barLabel(status, remaining, showCountdown) {
-  if (status === "break") return "▮▮"
-  if (status === "paused") return "paused"
-  if (status === "idle") return "idle"
+// What the bar shows next to the glyph. One glyph covers every state, and the
+// bar dims it while the timer is off, so the label is only ever the time on the
+// clock: frozen while paused, the break's own while a break is up. Words for
+// the state belong in the tooltip. Kept here so the horizontal label, the
+// vertical stack and the tooltip cannot drift apart.
+function barLabel(remaining, showCountdown) {
   if (!showCountdown) return ""
   return formatCountdown(remaining)
 }
 
-function tooltipFor(status, remaining, intervalMinutesValue, breakSecondsValue) {
-  if (status === "break") return "Look away — " + breakSecondsValue + "s break"
-  if (status === "paused") return "Eye breaks paused"
-  if (status === "idle") return "Paused while you are away"
-  if (status === "due") return "Eye break due"
-  return "Next eye break in " + formatDuration(remaining)
-    + " · every " + intervalMinutesValue + "m for " + breakSecondsValue + "s"
+// First line says what the timer is doing; the rest are facts a glance at the
+// bar cannot give. `stats` is optional so a caller with no history still gets
+// a tooltip.
+function tooltipFor(status, remaining, intervalMinutesValue, breakSecondsValue, stats) {
+  var lines = []
+  if (status === "break") lines.push("Look away — " + breakSecondsValue + "s break")
+  else if (status === "paused") lines.push("Eye breaks paused")
+  else if (status === "idle") lines.push("Paused while you are away")
+  else if (status === "due") lines.push("Eye break due")
+  else lines.push("Next eye break in " + formatDuration(remaining)
+    + " · every " + intervalMinutesValue + "m for " + breakSecondsValue + "s")
+  if (stats && stats.total > 0)
+    lines.push(stats.taken + " taken today · streak " + stats.streak)
+  lines.push("click panel · right pause · middle break now")
+  return lines.join("\n")
 }
 
 if (typeof module !== "undefined") {

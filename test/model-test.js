@@ -389,12 +389,23 @@ check("urgency stays at zero until the end of the cycle", () => {
   ok(M.urgency(0.925) > 0.4 && M.urgency(0.925) < 0.6, "ramps between")
 })
 
-check("the bar label matches the status", () => {
-  eq(M.barLabel("running", 12 * MIN + 34 * 1000, true), "12:34")
-  eq(M.barLabel("running", 12 * MIN, false), "", "countdown can be turned off")
-  eq(M.barLabel("paused", 0, true), "paused")
-  eq(M.barLabel("idle", 0, true), "idle")
-  eq(M.barLabel("break", 0, true), "▮▮")
+check("the bar label is the clock and nothing else", () => {
+  eq(M.barLabel(12 * MIN + 34 * 1000, true), "12:34")
+  eq(M.barLabel(12 * MIN, false), "", "countdown can be turned off")
+  eq(M.barLabel(0, true), "00:00", "a paused or due clock still shows a time")
+})
+
+check("the tooltip names the state, then the facts, then the clicks", () => {
+  const clicks = "click panel · right pause · middle break now"
+  eq(M.tooltipFor("running", 12 * MIN, 20, 30).split("\n"),
+     ["Next eye break in 12m · every 20m for 30s", clicks], "no history, no stats line")
+  eq(M.tooltipFor("running", 12 * MIN, 20, 30, { total: 0, taken: 0, streak: 0 }).split("\n").length, 2,
+     "an empty day adds nothing")
+  eq(M.tooltipFor("paused", 0, 20, 30, { total: 16, taken: 14, streak: 9 }).split("\n"),
+     ["Eye breaks paused", "14 taken today · streak 9", clicks])
+  eq(M.tooltipFor("idle", 0, 20, 30).split("\n")[0], "Paused while you are away")
+  eq(M.tooltipFor("break", 0, 20, 30).split("\n")[0], "Look away — 30s break")
+  eq(M.tooltipFor("due", 0, 20, 30).split("\n")[0], "Eye break due")
 })
 
 // -------------------------------------------------------------------- done

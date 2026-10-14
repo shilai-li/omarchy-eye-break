@@ -55,90 +55,79 @@ file separately only if you also want to erase the history.
 
 ### Bar
 
+One glyph, never swapped. The bar dims it while the timer is off and draws it
+in the theme's urgent color while a break is up; the words for the state are in
+the tooltip.
+
 | | |
 |---|---|
-| `󰈈 12:34` | running — time to the next break |
-| `󰈈 00:47` | due soon — the glyph warms toward your theme's urgent color |
-| `󰈈 ▮▮` | on break |
-| `󰈉 paused` | paused by you |
-| `󰈉 idle` | paused because you stepped away |
+| `󰈈 12:34` | running: time to the next break |
+| `󰈈 12:34`, dimmed | paused by you, or paused because you stepped away: the time is frozen |
+| `󰈈 00:17`, urgent color | on break: time left to look away |
 
-**Left click** opens the dashboard · **right click** pauses · **middle click**
-takes the break now. On a vertical bar the countdown stacks under the glyph.
+The tooltip says what the timer is doing, how many breaks you have taken today
+and your streak, and what each click does. **Left click** opens the dashboard ·
+**right click** pauses · **middle click** takes the break now. On a vertical bar
+the countdown stacks under the glyph. With `showCountdown` off the bar is the
+glyph alone.
 
 ### Dashboard
 
-Three boxed sections in the btop idiom — section name cut into the top border,
-block-glyph meters, tiny all-caps labels.
+Laid out like the Studio Effects panel, so the two read as siblings: a header,
+one large card for the thing being watched, tiles for what decides whether the
+clock runs, capsules that fill for amounts.
 
 ![Eye Break dashboard](assets/dashboard.png)
 
-```
-┌ next break ─────────────────────────────── 20m · 20s ┐
-│                                                      │
-│                      12:34                           │
-│                                                      │
-│  ████████████████████░░░░░░░░░░░░░░░░░░░░░░░   38%   │
-│  cycle 4 today · look 20 feet away for 20s           │
-└──────────────────────────────────────────────────────┘
-┌ today ───────────────────────────────────────────────┐
-│  ▁▁▂▃▅▇█▇▅▃▂▁▂▃▅▆                                    │
-│  23  03  07  11                                      │
-│                                                      │
-│  TAKEN  SKIPPED  STREAK  SCREEN  ADHERENCE  LAST     │
-│  14     2        9       6h 12m  88%        17m ago  │
-└──────────────────────────────────────────────────────┘
-┌ schedule ────────────────────────────────────────────┐
-│  INTERVAL             ▬▬▬▬▬▬▬▬●▬▬▬▬▬▬     20 min     │
-│  BREAK                ▬▬▬●▬▬▬▬▬▬▬▬▬▬      20 sec     │
-│  PAUSE WHEN IDLE                            [ on  ]  │
-│  PAUSE IN FULLSCREEN                        [ off ]  │
-│  STRICT MODE (NO SKIP)                      [ off ]  │
-└──────────────────────────────────────────────────────┘
-  space pause   s skip   b break now   ↑↓ interval   …
-```
+- **Header.** The schedule as a pill (`20 min · 30 s`). A red `BREAK` badge
+  while a break is on screen; a grey `PAUSED` or `AWAY` while the timer is off.
+- **Countdown card.** Time to the next break, and the cycle progress along its
+  bottom edge.
+- **Timer and Idle pause.** Two tiles, filled with the accent when on. Clicking
+  Timer pauses or resumes.
+- **Today.** Breaks per hour over a rolling window ending at the current hour,
+  so it still says something at 00:30, with taken, skipped, streak and the
+  share you kept. Hidden until there is a break to show.
+- **Every** and **Look away for.** Capsules you can drag, step with the arrow
+  keys or roll the wheel over. A drag writes once, when you let go.
+- **Fullscreen and Strict.** Two more tiles.
+- **Break now, Skip, clear history.** Skip is hidden in strict mode.
 
-The graph is breaks per hour over a rolling window ending at the current hour,
-so it still says something at 00:30.
+While the timer is off the panel shrinks to the countdown card, the two tiles
+and a note about what resumes it. Nothing else in it does anything then.
 
 | Key | |
 |---|---|
-| `space` / `enter` | pause / resume |
+| `↑` `↓` (or `k` `j`) | move through the rows |
+| `←` `→` (or `h` `l`) | step the capsule under the cursor ± 5 |
+| `space` / `enter` | act on the row under the cursor |
+| `p` | pause / resume, from any row |
 | `s` | skip this cycle |
 | `b` | take the break now |
-| `↑` `↓` (or `k` `j`) | interval ± 5 min |
-| `←` `→` (or `h` `l`) | break length ± 5 sec |
 | `+` `-` | interval ± 5 min |
 | `[` `]` | break length ± 5 sec |
-| `i` | toggle pause-when-idle |
+| `i` | toggle idle pause |
 | `f` | toggle pause-in-fullscreen |
+| `m` | toggle strict mode |
 | `r` | clear the history |
 | `tab` / `shift+tab` | walk to the neighbouring bar panel |
 | `esc` | close |
 
 ### Break screen
 
-Fullscreen on every monitor — a break you can sit out by looking at the other
+Fullscreen on every monitor: a break you can sit out by looking at the other
 screen is not a break.
 
 ![Eye Break fullscreen break overlay](assets/fullscreen.png)
 
-```
-        ╭───────────────────────────╮
-        │      L O O K   A W A Y    │
-        ╰───────────────────────────╯
-
-                  00:17
-
-        ████████████████░░░░░░░░░░░░░░░░
-
-           20 feet · 20 seconds · blink
-
-           esc  skip        space  +20s
-```
+A red `LOOK AWAY` badge, the countdown, a bar that fills as the break runs, and
+two buttons that show their keys: `esc` **Skip** and `space` **+20 s**.
 
 It dismisses itself when the countdown lands; you never have to click anything.
-`esc` skips (recorded as a skip). With **strict mode** on, `esc` does nothing.
+`esc` skips (recorded as a skip), and so does clicking **Skip**. Clicking
+**+20 s** adds time; any other click is ignored. With **strict mode** on, the
+Skip button is replaced by a note and `esc` does nothing. `space` still adds 20
+seconds.
 
 ---
 

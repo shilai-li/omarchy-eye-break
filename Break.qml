@@ -49,23 +49,77 @@ Item {
 
   readonly property string fontFamily: Style.font.family
   readonly property color foreground: Commons.Color.foreground
+  readonly property color muted: Commons.Color.muted
+  // Urgent means "this is taking over your screen", the same as the BREAK
+  // badge on the dashboard. It is the only color on the surface.
+  readonly property color urgent: Commons.Color.urgent
   // Denser than the menu scrim: the point of the surface is that there is
   // nothing left to read behind it.
   readonly property color scrim: Util.alpha(Commons.Color.background, 0.94)
-  // The meter warms toward the accent as it fills, so finishing reads as an
-  // arrival rather than a bar that merely stopped.
-  readonly property color meterColor: Qt.tint(
-    Qt.darker(foreground, 1.4),
-    Qt.rgba(Commons.Color.accent.r, Commons.Color.accent.g, Commons.Color.accent.b, progress))
+  readonly property color quietFill: Util.alpha(foreground, 0.12)
+  readonly property color cardFill: Util.alpha(foreground, 0.08)
 
-  // A fixed width: the meter is centered on an empty screen, so it has no
+  // The theme decides whether anything is round, as on the dashboard.
+  readonly property bool rounded: Style.cornerRadius > 0
+
+  // A fixed width: the bar is centered on an empty screen, so it has no
   // column to line up with and nothing to fit inside.
-  readonly property int meterCells: 32
-  readonly property int meterFilled: Model.meterFilledCells(progress, meterCells)
+  readonly property int barWidth: Style.space(420)
 
-  readonly property string hintText: strict
-    ? "strict mode — sit tight"
-    : "esc  skip        space  +20s"
+  // One button in the row under the bar: the key, then what it does. The
+  // surface still swallows every stray click; these two are the exceptions,
+  // because pressing a labelled button is not a stray click.
+  component KeyButton: Rectangle {
+    id: button
+    property string key: ""
+    property string text: ""
+    signal activated()
+
+    width: buttonRow.implicitWidth + Style.space(28)
+    height: Style.space(38)
+    radius: root.rounded ? height / 2 : 0
+    color: root.cardFill
+
+    MouseArea {
+      anchors.fill: parent
+      cursorShape: Qt.PointingHandCursor
+      onClicked: button.activated()
+    }
+
+    Row {
+      id: buttonRow
+      anchors.centerIn: parent
+      spacing: Style.space(10)
+
+      Rectangle {
+        anchors.verticalCenter: parent.verticalCenter
+        width: keyText.implicitWidth + Style.space(12)
+        height: keyText.implicitHeight + Style.space(4)
+        radius: root.rounded ? Style.space(5) : 0
+        color: root.quietFill
+
+        Text {
+          id: keyText
+          anchors.centerIn: parent
+          textFormat: Text.PlainText
+          text: button.key
+          color: root.foreground
+          font.family: root.fontFamily
+          font.pixelSize: Style.font.caption
+          font.bold: true
+        }
+      }
+      Text {
+        anchors.verticalCenter: parent.verticalCenter
+        textFormat: Text.PlainText
+        text: button.text
+        color: root.foreground
+        font.family: root.fontFamily
+        font.pixelSize: Style.font.body
+        font.bold: true
+      }
+    }
+  }
 
   function open(payloadJson) {
     // The shell delivers queued payloads one at a time. A second delivery for
@@ -149,7 +203,8 @@ Item {
   }
 
   // 250ms rather than a second: the countdown only needs whole seconds, but
-  // the meter beside it is 32 cells wide and would step in visible jumps.
+  // the bar beside it is hundreds of pixels wide and would step in visible
+  // jumps.
   Timer {
     interval: 250
     repeat: true
@@ -182,9 +237,9 @@ Item {
           color: root.scrim
         }
 
-        // Swallows every click. The break is dismissed with a key or not at
-        // all — a stray click on a surface that just covered your work should
-        // not count as "done looking away".
+        // Swallows every click. The break is dismissed with a key or a
+        // labelled button, never a stray click on a surface that just covered
+        // your work, which should not count as "done looking away".
         MouseArea {
           anchors.fill: parent
           acceptedButtons: Qt.AllButtons
@@ -210,27 +265,37 @@ Item {
 
         Column {
           anchors.centerIn: parent
-          spacing: Style.space(26)
+          spacing: Style.space(28)
 
+          // The badge the dashboard shows while a break is on, at screen size.
           Rectangle {
             anchors.horizontalCenter: parent.horizontalCenter
-            width: headline.implicitWidth + Style.space(56)
-            height: headline.implicitHeight + Style.space(22)
-            color: "transparent"
-            radius: Style.cornerRadius
-            border.width: Style.spacing.hairline
-            border.color: Style.normalBorderFor(root.foreground, Commons.Color.accent)
+            width: badgeRow.implicitWidth + Style.space(32)
+            height: badgeRow.implicitHeight + Style.space(14)
+            radius: root.rounded ? height / 2 : 0
+            color: Util.alpha(root.urgent, 0.16)
 
-            Text {
-              id: headline
+            Row {
+              id: badgeRow
               anchors.centerIn: parent
-              textFormat: Text.PlainText
-              text: "LOOK AWAY"
-              color: root.foreground
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.heading
-              font.letterSpacing: 6
-              font.bold: true
+              spacing: Style.space(8)
+
+              Rectangle {
+                anchors.verticalCenter: parent.verticalCenter
+                width: Style.space(8)
+                height: width
+                radius: width / 2
+                color: root.urgent
+              }
+              Text {
+                textFormat: Text.PlainText
+                text: "LOOK AWAY"
+                color: root.urgent
+                font.family: root.fontFamily
+                font.pixelSize: Style.font.body
+                font.letterSpacing: 2
+                font.bold: true
+              }
             }
           }
 
@@ -246,46 +311,80 @@ Item {
             font.bold: true
           }
 
+          // Fills left to right, the same as the capsules on the dashboard.
+          Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: root.barWidth
+            height: Style.space(12)
+            radius: root.rounded ? height / 2 : 0
+            color: root.quietFill
+
+            Rectangle {
+              height: parent.height
+              width: parent.width * root.progress
+              radius: parent.radius
+              color: root.urgent
+            }
+          }
+
+          Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            textFormat: Text.PlainText
+            text: "20 feet away · " + root.breakSeconds + " seconds · blink"
+            color: root.muted
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.subtitle
+          }
+
           Row {
             anchors.horizontalCenter: parent.horizontalCenter
-            spacing: 0
+            spacing: Style.space(12)
 
-            Text {
-              textFormat: Text.PlainText
-              text: Model.repeat("█", root.meterFilled)
-              color: root.meterColor
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.title
+            KeyButton {
+              visible: !root.strict
+              key: "esc"
+              text: "Skip"
+              onActivated: root.skip()
             }
 
-            Text {
-              textFormat: Text.PlainText
-              text: Model.repeat("░", root.meterCells - root.meterFilled)
-              color: Qt.darker(root.foreground, 2.4)
-              font.family: root.fontFamily
-              font.pixelSize: Style.font.title
+            // Strict mode takes the skip away and says so. Space still adds
+            // time: the one control that makes a break longer.
+            Rectangle {
+              visible: root.strict
+              width: strictRow.implicitWidth + Style.space(28)
+              height: Style.space(38)
+              radius: root.rounded ? height / 2 : 0
+              color: root.cardFill
+
+              Row {
+                id: strictRow
+                anchors.centerIn: parent
+                spacing: Style.space(8)
+
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: "\u{F033E}"
+                  color: root.muted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.icon
+                }
+                Text {
+                  anchors.verticalCenter: parent.verticalCenter
+                  textFormat: Text.PlainText
+                  text: "Strict mode — sit tight"
+                  color: root.muted
+                  font.family: root.fontFamily
+                  font.pixelSize: Style.font.body
+                }
+              }
             }
-          }
 
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            textFormat: Text.PlainText
-            text: "20 feet · " + root.breakSeconds + " seconds · blink"
-            color: Qt.darker(root.foreground, 1.5)
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.body
-            font.letterSpacing: 1
-          }
-
-          Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            topPadding: Style.space(18)
-            textFormat: Text.PlainText
-            text: root.hintText
-            color: Qt.darker(root.foreground, 2.1)
-            font.family: root.fontFamily
-            font.pixelSize: Style.font.caption
-            font.letterSpacing: 1
+            KeyButton {
+              key: "space"
+              text: "+20 s"
+              onActivated: root.extend()
+            }
           }
         }
       }

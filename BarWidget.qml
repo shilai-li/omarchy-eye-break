@@ -70,35 +70,35 @@ BarWidget {
   property real probeArmedAt: 0
 
   readonly property real remainingMs: Model.remainingMs(state, intervalMs, now)
-  readonly property real progress: Model.cycleProgress(state, intervalMs, now)
   readonly property string status: Model.statusOf(state, intervalMs, now)
   readonly property bool dimmed: status === "paused" || status === "idle"
-  readonly property real urgency: dimmed || status === "break" ? 0 : Model.urgency(progress)
+  readonly property bool onBreak: status === "break"
+  readonly property real breakRemainingMs: Math.max(0, breakMs - (now - state.breakStartedAt))
 
-  readonly property string glyphText: dimmed ? "󰈉" : "󰈈"
-  readonly property string labelText: Model.barLabel(status, remainingMs, showCountdown)
+  // One glyph for every state. The bar dims it while the timer is off and
+  // colors it while a break is up; the words for the state are in the tooltip.
+  readonly property string glyphText: "󰈈"
+  // The clock, frozen while paused, and the break's own while one is up.
+  readonly property string labelText: Model.barLabel(onBreak ? breakRemainingMs : remainingMs, showCountdown)
   readonly property string displayText: labelText === "" ? glyphText : glyphText + " " + labelText
 
   // Vertical bars have room for stacked icon-sized lines and nothing else, so
   // the countdown splits at its colons rather than being squeezed onto one.
   readonly property var verticalLines: {
     var lines = [glyphText]
-    if (dimmed || status === "break" || !showCountdown) return lines
-    var parts = Model.formatCountdown(remainingMs).split(":")
+    if (labelText === "") return lines
+    var parts = labelText.split(":")
     for (var i = 0; i < parts.length; i++) lines.push(parts[i])
     return lines
   }
 
-  // The bar's own foreground until the cycle is nearly up, then blended
-  // toward the theme's urgent color. "Nearly time" should be legible without
-  // adding a second glyph to a bar that is meant to stay quiet.
+  // The bar's own foreground, and its urgent color while a break is up: the
+  // one state that captures the display. Dimming is the button's own, so it
+  // reads the same as every other inactive widget on the bar.
   readonly property color baseForeground: bar ? bar.barForeground : Commons.Color.foreground
-  readonly property color glyphColor: {
-    if (root.dimmed) return Qt.darker(root.baseForeground, 1.7)
-    if (root.urgency <= 0) return root.baseForeground
-    var hot = bar ? bar.urgent : Commons.Color.urgent
-    return Qt.tint(root.baseForeground, Qt.rgba(hot.r, hot.g, hot.b, root.urgency))
-  }
+  readonly property color glyphColor: root.onBreak
+    ? (bar ? bar.urgent : Commons.Color.urgent)
+    : root.baseForeground
 
   // ---- Writer election. Every instance renders; the first one in the bar's
   //      own slot order advances the cycle. The order is the same array for
@@ -557,12 +557,14 @@ BarWidget {
     bar: root.bar
     text: root.vertical ? "" : root.displayText
     foreground: root.glyphColor
+    dimmed: root.dimmed
     labelVisible: !root.vertical
     hasVisualContent: root.vertical ? root.verticalLines.length > 0 : text !== ""
     fixedHeight: root.vertical ? root.verticalLines.length * Style.bar.iconSlot : -1
     horizontalMargin: 8.75
     verticalPadding: 8.75
-    tooltipText: Model.tooltipFor(root.status, root.remainingMs, root.intervalMinutes, root.breakSeconds)
+    tooltipText: Model.tooltipFor(root.status, root.remainingMs, root.intervalMinutes, root.breakSeconds,
+                                  Model.statsFor(root.state.history, root.now, root.intervalMs))
 
     onPressed: function(b) {
       if (b === Qt.RightButton) root.togglePause()

@@ -148,6 +148,77 @@ check("returning from a whole cycle's absence counts as a break taken", () => {
   ok(!M.isPaused(s), "no longer paused")
 })
 
+// A resumed edge is not a return. The screensaver launch is activity, and
+// Hyprland then keeps that notification not-idle for its whole timeout, so a
+// hold measured in seconds cannot tell the blip from someone sitting down.
+// The shell leaves its away-cycle armed across the blip, and a lock whose
+// screensaver never stayed up drops that cycle while the seat is still empty.
+function idleWitness(over) {
+  return Object.assign({
+    monitorIdle: false,
+    probeIdle: false,
+    shellKnown: true,
+    shellInCycle: false,
+    sessionLocked: false,
+    resumeSeen: false,
+    probeSawIdle: false,
+    probeQuietMs: 0
+  }, over)
+}
+
+check("an idle pause clears only when the seat and the shell agree", () => {
+  eq(M.idlePauseShouldClear(idleWitness({ monitorIdle: true, resumeSeen: true })), false,
+     "main monitor still idle")
+  eq(M.idlePauseShouldClear(idleWitness({ probeIdle: true, resumeSeen: true, probeQuietMs: 10000 })), false,
+     "probe says the seat is empty")
+  eq(M.idlePauseShouldClear(idleWitness({ shellKnown: false, resumeSeen: true })), false,
+     "an unreadable shell is not a return")
+  eq(M.idlePauseShouldClear(idleWitness({ shellInCycle: true, resumeSeen: true })), false,
+     "screensaver blip leaves the away-cycle armed")
+  eq(M.idlePauseShouldClear(idleWitness({
+    sessionLocked: true, resumeSeen: true, probeQuietMs: 10000
+  })), false, "a cancelled cycle on the lock screen is still away")
+  eq(M.idlePauseShouldClear(idleWitness({ resumeSeen: true })), true,
+     "one input on the notification that went idle, and the shell agrees")
+  eq(M.idlePauseShouldClear(idleWitness({ probeSawIdle: true })), true,
+     "the probe went idle and then saw a single input")
+  eq(M.idlePauseShouldClear(idleWitness({ probeSawIdle: true, shellInCycle: true })), false,
+     "that input still has to survive the shell")
+  eq(M.idlePauseShouldClear(idleWitness({ probeQuietMs: M.IDLE_PROBE_WAIT_MS - 1 })), false,
+     "a fresh probe has not had time to report")
+  eq(M.idlePauseShouldClear(idleWitness({ probeQuietMs: M.IDLE_PROBE_WAIT_MS })), true,
+     "quiet past the probe means this notification was born in use")
+  eq(M.idlePauseShouldClear(idleWitness({ probeQuietMs: NaN })), false, "a nonsense wait is not quiet")
+  eq(M.idlePauseShouldClear(idleWitness({ probeQuietMs: -1 })), false, "a negative wait is not quiet")
+  eq(M.idlePauseShouldClear(), false, "no witness at all")
+  eq(M.idlePauseShouldClear(null), false, "a null witness")
+})
+
+check("the shell witness parses only a status we can trust", () => {
+  const status = (inIdleCycle) => JSON.stringify({
+    idle: !inIdleCycle,
+    inIdleCycle: inIdleCycle,
+    timers: { screensaver: false, lock: false }
+  })
+  eq(M.parseIdleWitness(status(false) + "\nLOCK:false\n"),
+     { shellKnown: true, shellInCycle: false, sessionLocked: false },
+     "back at the desk")
+  eq(M.parseIdleWitness(status(true) + "\nLOCK:false"),
+     { shellKnown: true, shellInCycle: true, sessionLocked: false },
+     "away-cycle still armed")
+  eq(M.parseIdleWitness("noise before\n" + status(false) + "\nLOCK:true\n"),
+     { shellKnown: true, shellInCycle: false, sessionLocked: true },
+     "locked, cycle already cancelled")
+  const unknown = { shellKnown: false, shellInCycle: false, sessionLocked: false }
+  eq(M.parseIdleWitness(""), unknown, "empty output")
+  eq(M.parseIdleWitness("not json\nLOCK:false"), unknown, "no status object")
+  eq(M.parseIdleWitness(status(false)), unknown, "lock line missing")
+  eq(M.parseIdleWitness(status(false) + "\nLOCK:maybe"), unknown, "lock flag not a boolean")
+  eq(M.parseIdleWitness('{"inIdleCycle":"false"}\nLOCK:false'), unknown,
+     "a string is not the boolean the shell writes")
+  eq(M.parseIdleWitness("{not json}\nLOCK:false"), unknown, "broken json")
+})
+
 check("returning from a short idle only resumes", () => {
   let s = M.pause(M.startCycle(M.defaultState(T0), T0), T0 + 5 * MIN, "idle")
   s = M.endIdle(s, T0 + 5 * MIN + 3000, INTERVAL)

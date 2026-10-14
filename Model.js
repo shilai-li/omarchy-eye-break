@@ -27,6 +27,11 @@ var HISTORY_LIMIT = 600
 // be interrupting the wrong moment.
 var STALE_GRACE_MS = 5 * MS_PER_MINUTE
 
+// A presence probe's timeout is one second. A notification created while the
+// seat is already idle stays not-idle until that timeout passes, so "quiet"
+// is only evidence of input once this wait has elapsed without an idle report.
+var IDLE_PROBE_WAIT_MS = 2500
+
 // Eight levels of vertical block. btop draws its per-core history this way
 // and the glyphs are in every Nerd Font, so the graph costs nothing beyond
 // the string it renders into.
@@ -299,6 +304,63 @@ function endIdle(state, now, creditMs) {
   return resume(state, now, "idle")
 }
 
+// Whether to drop an idle pause. A `resumed` event is not enough on its own:
+// launching the screensaver is activity, and the compositor then keeps that
+// notification not-idle until its whole timeout runs again. The shell leaves
+// its away-cycle armed across that blip (`shellInCycle`). A lock screen whose
+// screensaver never stayed up cancels the cycle without anyone sitting down
+// (`sessionLocked`). Either witness means the absence is not over.
+//
+// `resumeSeen` is the main notification's own idle-then-resumed edge.
+// `probeSawIdle` is a one-second probe that has reported this seat idle, so
+// its being quiet now is a later input and not the second after it was
+// created. A probe that has never fired has to stay quiet for
+// IDLE_PROBE_WAIT_MS, or a notification built while the user is still away
+// looks like a return.
+function idlePauseShouldClear(witness) {
+  var w = witness || {}
+  if (w.monitorIdle === true) return false
+  if (w.probeIdle === true) return false
+  if (w.shellKnown !== true) return false
+  if (w.shellInCycle === true) return false
+  if (w.sessionLocked === true) return false
+  if (w.resumeSeen === true || w.probeSawIdle === true) return true
+  var quiet = Number(w.probeQuietMs)
+  if (!isFinite(quiet) || quiet < 0) return false
+  return quiet >= IDLE_PROBE_WAIT_MS
+}
+
+// `omarchy-shell idle status` followed by a `LOCK:true|false` line from
+// `omarchy-shell lock isLocked`. Anything we cannot parse is "unknown",
+// and unknown does not clear a pause: a missed read keeps the label for
+// another second, a guessed one starts the clock while the seat is empty.
+function parseIdleWitness(text) {
+  var lines = String(text || "").split("\n")
+  var lockLine = ""
+  var jsonLines = []
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf("LOCK:") === 0) lockLine = lines[i]
+    else jsonLines.push(lines[i])
+  }
+  var flag = lockLine.slice(5).trim()
+  var lockKnown = flag === "true" || flag === "false"
+  var status = null
+  var blob = jsonLines.join("\n")
+  var start = blob.indexOf("{")
+  var end = blob.lastIndexOf("}")
+  if (start >= 0 && end > start) {
+    try { status = JSON.parse(blob.slice(start, end + 1)) } catch (e) { status = null }
+  }
+  if (!status || typeof status.inIdleCycle !== "boolean" || !lockKnown) {
+    return { shellKnown: false, shellInCycle: false, sessionLocked: false }
+  }
+  return {
+    shellKnown: true,
+    shellInCycle: status.inIdleCycle === true,
+    sessionLocked: flag === "true"
+  }
+}
+
 function beginBreak(state, now) {
   var next = cloneState(state)
   next.breakStartedAt = sanitizeTime(now, 0)
@@ -532,6 +594,7 @@ if (typeof module !== "undefined") {
     MS_PER_HOUR: MS_PER_HOUR,
     MS_PER_DAY: MS_PER_DAY,
     STALE_GRACE_MS: STALE_GRACE_MS,
+    IDLE_PROBE_WAIT_MS: IDLE_PROBE_WAIT_MS,
     SPARK_LEVELS: SPARK_LEVELS,
     clampInt: clampInt,
     intervalMinutes: intervalMinutes,
@@ -559,6 +622,8 @@ if (typeof module !== "undefined") {
     resume: resume,
     togglePause: togglePause,
     endIdle: endIdle,
+    idlePauseShouldClear: idlePauseShouldClear,
+    parseIdleWitness: parseIdleWitness,
     beginBreak: beginBreak,
     recordBreak: recordBreak,
     postpone: postpone,

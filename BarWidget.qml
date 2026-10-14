@@ -28,7 +28,7 @@ BarWidget {
   readonly property int intervalMinutes: Model.intervalMinutes(setting("intervalMinutes", 20))
   readonly property int breakSeconds: Model.breakSeconds(setting("breakSeconds", 20))
   readonly property bool pauseWhenIdle: Model.boolSetting(setting("pauseWhenIdle", true), true)
-  readonly property int idleGraceSeconds: Model.idleGraceSeconds(setting("idleGraceSeconds", 60))
+  readonly property int idleGraceSeconds: Model.idleGraceSeconds(setting("idleGraceSeconds", 300))
   readonly property bool pauseInFullscreen: Model.boolSetting(setting("pauseInFullscreen", false), false)
   readonly property bool strictMode: Model.boolSetting(setting("strictMode", false), false)
   readonly property int preNotifySeconds: Model.preNotifySeconds(setting("preNotifySeconds", 0))
@@ -57,6 +57,17 @@ BarWidget {
   // Guards the heads-up notification to one per cycle, keyed by the cycle it
   // belongs to so a new cycle re-arms it without any extra bookkeeping.
   property real warnedForCycle: 0
+
+  // The main notification went idle and then resumed during this pause.
+  // A notification created later, after a bar rebuild, never sends that edge.
+  property bool idleResumeSeen: false
+
+  // The one-second probe has reported this seat idle since it was armed.
+  // Quiet after that is input. Quiet in the second it was created is not:
+  // a new notification starts not-idle even when the seat has been empty
+  // for hours.
+  property bool probeSawIdle: false
+  property real probeArmedAt: 0
 
   readonly property real remainingMs: Model.remainingMs(state, intervalMs, now)
   readonly property real progress: Model.cycleProgress(state, intervalMs, now)
@@ -127,7 +138,13 @@ BarWidget {
       root.commit(Model.recordBreak(root.state, "skipped", root.now))
       return
     }
-    if (Model.isBreaking(root.state) || Model.isPaused(root.state)) return
+    // An idle pause is the one paused state the clock may leave on its own,
+    // and not while a break overlay is up: endIdle would record that break.
+    if (Model.isBreaking(root.state)) return
+    if (Model.isPaused(root.state)) {
+      root.reconcileIdle()
+      return
+    }
 
     // Woken from suspend, or the shell was down. Nobody was here to take the
     // break, and firing one at the moment a lid opens interrupts the wrong
@@ -370,6 +387,66 @@ BarWidget {
     }
   }
 
+  // ext-idle-notify only delivers edges, and a new notification does not
+  // repeat an idle the previous one already sent. Rebuilding the bar therefore
+  // leaves `pausedBy: "idle"` on disk with a monitor that will never say
+  // "resumed" for that episode. The resumed edge is also the wrong signal on
+  // its own: the screensaver launch is activity, after which Hyprland keeps
+  // the notification not-idle for its whole timeout, not for a few dozen
+  // milliseconds. The shell remembers that launch and leaves the away-cycle
+  // armed; a lock screen stays locked when the screensaver fails to appear.
+  // Those two are what "still away" means. The one-second probe only covers
+  // the gap where this notification was created while the seat was already
+  // empty and the shell has not armed a cycle yet.
+  function reconcileIdle() {
+    if (!root.amWriter()) return
+    if (root.state.pausedBy !== "idle" || Model.isBreaking(root.state)) return
+    if (idleMonitor.isIdle || presenceProbe.isIdle) return
+
+    var quiet = root.probeArmedAt > 0 ? root.now - root.probeArmedAt : 0
+    // Ask the shell only once the seat-side reading could possibly be a
+    // return. A "no" from the shell is re-checked on the next tick; spawning
+    // the probe while the one-second notification still says idle cannot
+    // change the answer.
+    if (!Model.idlePauseShouldClear({
+      monitorIdle: false,
+      probeIdle: false,
+      shellKnown: true,
+      shellInCycle: false,
+      sessionLocked: false,
+      resumeSeen: root.idleResumeSeen,
+      probeSawIdle: root.probeSawIdle,
+      probeQuietMs: quiet
+    })) return
+    if (idleWitnessProc.running) return
+    idleWitnessProc.running = true
+  }
+
+  function applyIdleWitness(text) {
+    if (!root.amWriter()) return
+    if (root.state.pausedBy !== "idle" || Model.isBreaking(root.state)) return
+    var at = Date.now()
+    root.now = at
+    var shell = Model.parseIdleWitness(text)
+    var quiet = root.probeArmedAt > 0 ? at - root.probeArmedAt : 0
+    if (!Model.idlePauseShouldClear({
+      monitorIdle: idleMonitor.isIdle,
+      probeIdle: presenceProbe.isIdle,
+      shellKnown: shell.shellKnown,
+      shellInCycle: shell.shellInCycle,
+      sessionLocked: shell.sessionLocked,
+      resumeSeen: root.idleResumeSeen,
+      probeSawIdle: root.probeSawIdle,
+      probeQuietMs: quiet
+    })) return
+    root.idleResumeSeen = false
+    root.probeSawIdle = false
+    root.probeArmedAt = 0
+    // The interval, not the break length: only an absence as long as a whole
+    // work cycle is evidence that a break actually happened.
+    root.commit(Model.endIdle(root.state, at, root.intervalMs))
+  }
+
   IdleMonitor {
     id: idleMonitor
     // Enabled on every instance so the binding stays simple; the handler is
@@ -382,14 +459,54 @@ BarWidget {
       var at = Date.now()
       root.now = at
       if (idleMonitor.isIdle) {
+        root.idleResumeSeen = false
         // Going idle during a break is the break working. Leave it alone.
         if (Model.isBreaking(root.state)) return
         root.commit(Model.pause(root.state, at, "idle"))
-      } else {
-        // The interval, not the break length: only an absence as long as a
-        // whole work cycle is evidence that a break actually happened.
-        root.commit(Model.endIdle(root.state, at, root.intervalMs))
+      } else if (root.state.pausedBy === "idle") {
+        // Not cleared here. This edge is also the screensaver starting, and
+        // the notification will stay not-idle for the whole grace period
+        // afterwards. reconcileIdle() asks the shell before it writes.
+        root.idleResumeSeen = true
+        root.reconcileIdle()
       }
+    }
+  }
+
+  IdleMonitor {
+    id: presenceProbe
+    // Timeout stays under Model.IDLE_PROBE_WAIT_MS. Armed only while an idle
+    // pause is no longer backed by the main notification, so a seat that is
+    // still empty reports idle within a second and a single later input can
+    // clear the label without a stretch of uninterrupted typing.
+    enabled: root.pauseWhenIdle && root.state.pausedBy === "idle"
+             && !Model.isBreaking(root.state) && !idleMonitor.isIdle
+    timeout: 1
+    respectInhibitors: true
+    onEnabledChanged: {
+      root.probeSawIdle = false
+      root.probeArmedAt = enabled ? Date.now() : 0
+    }
+    onIsIdleChanged: {
+      if (!presenceProbe.enabled) return
+      if (presenceProbe.isIdle) {
+        root.probeSawIdle = true
+        return
+      }
+      // Resumed after this probe had fired: one input, not a fresh notification.
+      if (root.probeSawIdle) root.reconcileIdle()
+    }
+  }
+
+  // One read of the two witnesses, and only while a clear is plausible.
+  // Polling them on every countdown tick would be a process a second for
+  // the whole day.
+  Process {
+    id: idleWitnessProc
+    command: ["bash", "-c", "omarchy-shell idle status && echo LOCK:$(omarchy-shell lock isLocked)"]
+    stdout: StdioCollector { id: idleWitnessOut; waitForEnd: true }
+    onExited: function(exitCode) {
+      root.applyIdleWitness(exitCode === 0 ? idleWitnessOut.text : "")
     }
   }
 
